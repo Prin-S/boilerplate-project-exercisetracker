@@ -63,28 +63,29 @@ app.get("/api/users", (req, res) => {
   })
 });
 
-
-
-
-// Add new username
+// User enters username
 app.post("/api/users", (req, res, next) => {
   username = req.body.username;
   next();
 }, (req, res, next) => {
-  // Find all entries from the database
+  // Find entered username from the database
   User.find({username: username}, (err, data) => {
     if (err) {
       console.log(err);
     } else {
+      // If username is not found
       if (data[0] === undefined) {
+        // Create new username
         User.create({username: username}, (err, data) => {
           if (err) {
             console.log(err);
           } else {
+            // Find username again as it has just been added
             User.find({username: username}, (err, data) => {
               if (err) {
                 console.log(err);
               } else {
+                // Show username details
                 res.json({"username": data[0].username, "_id": data[0]._id});
               }
             });
@@ -92,6 +93,7 @@ app.post("/api/users", (req, res, next) => {
           }
         });
       } else {
+        // If username is found, just show username details
         res.json({"username": data[0].username, "_id": data[0]._id});
       }
     }
