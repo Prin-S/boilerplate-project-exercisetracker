@@ -67,7 +67,7 @@ app.get("/api/users", (req, res) => {
 app.post("/api/users", (req, res, next) => {
   username = req.body.username;
   next();
-}, (req, res, next) => {
+}, (req, res) => {
   // Find entered username from the database
   User.find({username: username}, (err, data) => {
     if (err) {
@@ -89,7 +89,6 @@ app.post("/api/users", (req, res, next) => {
                 res.json({"username": data[0].username, "_id": data[0]._id});
               }
             });
-            
           }
         });
       } else {
@@ -98,11 +97,58 @@ app.post("/api/users", (req, res, next) => {
       }
     }
   });
+});
+
+// User enters exercise details
+app.post("/api/users/:_id/exercises", (req, res, next) => {
+  id = req.body[":_id"];
+  description = req.body.description;
+  duration = req.body.duration;
+  date = req.body.date;
+
+  if (!date) {
+    date = new Date().toDateString();
+  } else {
+    date = new Date(date).toDateString();
+  }
+
   next();
 }, (req, res) => {
-
-  console.log("ready");
-
+  User.find({_id: id}, (err, data) => {
+    if (err) {
+      res.json({"error": "Invalid User ID"});
+    } else {
+      let username = data[0].username;
+      Exercise.create({username: username, description: description, duration: duration, date: date}, (err, data) => {
+        if (err) {
+          if (description == "" && duration == "") {
+            res.json({"error 1": "Description cannot be empty", "error 2": "Duration cannot be empty"});
+          } else if (description == "" && !Number(duration)) {
+            res.json({"error 1": "Description cannot be empty", "error 2": "Duration must be a number"});
+          } else if (description == "") {
+            res.json({"error": "Description cannot be empty"});
+          } else if (duration == "") {
+            res.json({"error": "Duration cannot be empty"});
+          } else if (!Number(duration)) {
+            res.json({"error": "Duration must be a number"});
+          }
+        } else {
+          Exercise.find({username: username})
+                  .sort({_id: "desc"})
+                  .limit(1)
+                  .exec((err, data) => {
+            if (err) {
+              console.log(err);
+            } else {
+              console.log(data);
+              res.json({"username": data[0].username, "description": data[0].description, "duration": data[0].duration, "date": data[0].date, "_id": data[0]._id});
+            }
+          })
+        }
+      });
+      
+    }
+  });
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
