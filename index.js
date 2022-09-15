@@ -22,34 +22,25 @@ let userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true
-  }
-});
-
-let exerciseSchema = new mongoose.Schema({
-  username: {
-    type: String,
-    required: true
   },
-  description: {
-    type: String,
-    required: true
-  },
-  duration: {
-    type: Number,
-    required: true
-  },
-  date: String
+  exercises: [{
+    description: {
+      type: String,
+      required: true
+    },
+    duration: {
+      type: Number,
+      required: true
+    },
+    date: String
+  }]
 });
 
 let User = mongoose.model("User", userSchema);
-let Exercise = mongoose.model("Exercise", exerciseSchema);
 
-// For clearing databases
+// For clearing the database
 /*User.remove((err) => {
   console.log( "User database cleared" );
-});*/
-/*Exercise.remove((err) => {
-  console.log( "Exercise database cleared" );
 });*/
 
 // Show all existing users when visiting /api/users
@@ -118,35 +109,36 @@ app.post("/api/users/:_id/exercises", (req, res, next) => {
     if (err) {
       res.json({"error": "Invalid User ID"});
     } else {
-      let username = data[0].username;
-      Exercise.create({username: username, description: description, duration: duration, date: date}, (err, data) => {
-        if (err) {
-          if (description == "" && duration == "") {
-            res.json({"error 1": "Description cannot be empty", "error 2": "Duration cannot be empty"});
-          } else if (description == "" && !Number(duration)) {
-            res.json({"error 1": "Description cannot be empty", "error 2": "Duration must be a number"});
-          } else if (description == "") {
-            res.json({"error": "Description cannot be empty"});
-          } else if (duration == "") {
-            res.json({"error": "Duration cannot be empty"});
-          } else if (!Number(duration)) {
-            res.json({"error": "Duration must be a number"});
+      if (data.length == 0) {
+        res.json({"error": "Invalid User ID"});
+      } else if (description == "" && duration == "") {
+        res.json({"error 1": "Description cannot be empty", "error 2": "Duration cannot be empty"});
+      } else if (description == "" && !Number(duration)) {
+        res.json({"error 1": "Description cannot be empty", "error 2": "Duration must be a number"});
+      } else if (description == "") {
+        res.json({"error": "Description cannot be empty"});
+      } else if (duration == "") {
+        res.json({"error": "Duration cannot be empty"});
+      } else if (!Number(duration)) {
+        res.json({"error": "Duration must be a number"});
+      } else {
+        User.findByIdAndUpdate(id, {$push: {exercises: {description: description, duration: duration, date: date}}}, {new: true}, (err, data) => {
+          if (err) {
+            console.log(err);
+          } else {
+            User.find({_id: id}, (err, data) => {
+              if (err) {
+                console.log(err);
+              } else {
+                exerciseList = data[0].exercises;
+                lastestExercise = exerciseList[exerciseList.length - 1];
+                
+                res.json({"username": data[0].username, "description": lastestExercise.description, "duration": lastestExercise.duration, "date": lastestExercise.date, "_id": data[0]._id});
+              }
+            })
           }
-        } else {
-          Exercise.find({username: username})
-                  .sort({_id: "desc"})
-                  .limit(1)
-                  .exec((err, data) => {
-            if (err) {
-              console.log(err);
-            } else {
-              console.log(data);
-              res.json({"username": data[0].username, "description": data[0].description, "duration": data[0].duration, "date": data[0].date, "_id": data[0]._id});
-            }
-          })
-        }
-      });
-      
+        });
+      }
     }
   });
 });
