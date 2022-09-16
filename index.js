@@ -7,23 +7,21 @@ const port = process.env.PORT || 3000;
 
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const e = require('express');
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 app.use(cors())
 app.use(express.static('public'))
+app.use(bodyParser.urlencoded({extended: false}));
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
-
-app.use(bodyParser.urlencoded({extended: false}));
 
 let userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true
   },
-  exercises: [{
+  log: [{
     description: {
       type: String,
       required: true
@@ -43,7 +41,7 @@ let User = mongoose.model("User", userSchema);
   console.log( "User database cleared" );
 });*/
 
-// Show all existing users when visiting /api/users
+// Show all existing users when visiting '/api/users'
 app.get("/api/users", (req, res) => {
   User.find({}, (err, data) => {
     if (err) {
@@ -54,12 +52,12 @@ app.get("/api/users", (req, res) => {
   })
 });
 
-// User enters username
+// Add username
 app.post("/api/users", (req, res, next) => {
   username = req.body.username;
   next();
 }, (req, res) => {
-  // Find entered username from the database
+  // Check if username exists
   User.find({username: username}, (err, data) => {
     if (err) {
       console.log(err);
@@ -77,26 +75,27 @@ app.post("/api/users", (req, res, next) => {
                 console.log(err);
               } else {
                 // Show username details
-                res.json({"username": data[0].username, "_id": data[0]._id});
+                res.json({username: data[0].username, _id: data[0]._id});
               }
             });
           }
         });
       } else {
         // If username is found, just show username details
-        res.json({"username": data[0].username, "_id": data[0]._id});
+        res.json({username: data[0].username, _id: data[0]._id});
       }
     }
   });
 });
 
-// User enters exercise details
+// Add exercise
 app.post("/api/users/:_id/exercises", (req, res, next) => {
-  id = req.body[":_id"];
+  id = req.params._id;
   description = req.body.description;
   duration = req.body.duration;
   date = req.body.date;
 
+  // Change 'date' to date object, then to string
   if (!date) {
     date = new Date().toDateString();
   } else {
@@ -105,42 +104,86 @@ app.post("/api/users/:_id/exercises", (req, res, next) => {
 
   next();
 }, (req, res) => {
+  // Check if id exists
   User.find({_id: id}, (err, data) => {
     if (err) {
-      res.json({"error": "Invalid User ID"});
+      res.json({error: "Invalid User ID"});
     } else {
-      if (data.length == 0) {
-        res.json({"error": "Invalid User ID"});
-      } else if (description == "" && duration == "") {
-        res.json({"error 1": "Description cannot be empty", "error 2": "Duration cannot be empty"});
-      } else if (description == "" && !Number(duration)) {
-        res.json({"error 1": "Description cannot be empty", "error 2": "Duration must be a number"});
-      } else if (description == "") {
-        res.json({"error": "Description cannot be empty"});
-      } else if (duration == "") {
-        res.json({"error": "Duration cannot be empty"});
-      } else if (!Number(duration)) {
-        res.json({"error": "Duration must be a number"});
-      } else {
-        User.findByIdAndUpdate(id, {$push: {exercises: {description: description, duration: duration, date: date}}}, {new: true}, (err, data) => {
+      (data.length == 0) ? res.json({error: "Invalid User ID"})
+      : (description == "" && duration == "") ? res.json({"error 1": "Description cannot be empty", "error 2": "Duration cannot be empty"})
+      : (description == "" && !Number(duration)) ? res.json({"error 1": "Description cannot be empty", "error 2": "Duration must be a number"})
+      : (description == "") ? res.json({error: "Description cannot be empty"})
+      : (duration == "") ? res.json({error: "Duration cannot be empty"})
+      : (!Number(duration)) ? res.json({error: "Duration must be a number"})
+      // If id exists, update user with new exercise
+      : User.findByIdAndUpdate(id, {$push: {log: {description: description, duration: duration, date: date}}}, {new: true}, (err, data) => {
           if (err) {
             console.log(err);
           } else {
+            // Show added exercise details
             User.find({_id: id}, (err, data) => {
               if (err) {
                 console.log(err);
               } else {
-                exerciseList = data[0].exercises;
-                lastestExercise = exerciseList[exerciseList.length - 1];
+                exerciseList = data[0].log;
+                lastestExercise = exerciseList[exerciseList.length - 1]; // Find the newest exercise entry details
                 
-                res.json({"username": data[0].username, "description": lastestExercise.description, "duration": lastestExercise.duration, "date": lastestExercise.date, "_id": data[0]._id});
+                res.json({username: data[0].username, description: lastestExercise.description, duration: lastestExercise.duration, date: lastestExercise.date, _id: data[0]._id});
               }
             })
           }
         });
-      }
     }
   });
+});
+
+// Show user exercise log according to id
+app.get("/api/users/:_id/logs", (req, res, next) => {
+  id = req.params._id;
+  from = req.query.from;
+  to = req.query.to;
+  limit = req.query.limit;
+  next();
+}, (req, res) => {
+  // Find all exercise details of input id
+  User.find({_id: id}, (err, data) => {
+    if (err) {
+      res.json({error: "Invalid User ID"});
+    } else {
+      if (data.length == 0) {
+        res.json({error: "Invalid User ID"});
+      } else {
+        // Map each exercise entry into an array of objects
+        log = data[0].log.map(each => {
+          return {
+            description: each.description,
+            duration: each.duration,
+            date: each.date
+          }
+        })
+        
+        // If 'from' query is used, select entries with dates from 'from' onwards
+        if (from) {
+          fromDate = new Date(from).toDateString();
+          log = log.filter(each => Date.parse(each.date) >= Date.parse(fromDate));
+        }
+
+        // If 'to' query is used, select entries with dates up to 'to'
+        if (to) {
+          toDate = new Date(to).toDateString();
+          log = log.filter(each => Date.parse(each.date) <= Date.parse(toDate));
+        }
+        
+        // If 'limit' query is used, limit the number of entries shown to 'limit'
+        if (limit) {
+          log = log.slice(0, limit);
+        }
+        
+        // Show username, count (number of exercise entries) and exercise log
+        res.json({username: data[0].username, count: data[0].log.length, _id: id, log});
+      }
+    }
+  })
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
